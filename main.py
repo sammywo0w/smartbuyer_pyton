@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import openai
 import os
 from dotenv import load_dotenv
-from supabase import create_client  # <-- ВАЖНО: вне функций!
+from supabase import create_client
 
 load_dotenv()
 
@@ -12,15 +12,16 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-# Инициализация клиентов
+# Клиент Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 app = FastAPI()
 
 # Модель запроса
 class TextInput(BaseModel):
     text: str
 
-# Ручка для Make / тестов
+# Правильно исправленная ручка /embed
 @app.post("/embed")
 async def get_embedding(input: TextInput):
     try:
@@ -28,11 +29,15 @@ async def get_embedding(input: TextInput):
             input=input.text,
             model="text-embedding-3-small"
         )
-        return {"embedding": response['data'][0]['embedding']}
+
+        embedding = response.data[0].embedding  # <-- Правильный доступ!
+
+        return {"embedding": embedding}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Webhook для Supabase Trigger
+# Правильно исправленная ручка для webhook от Supabase
 @app.post("/embed-hook")
 async def embed_hook(input: dict):
     try:
@@ -46,10 +51,12 @@ async def embed_hook(input: dict):
             input=text,
             model="text-embedding-3-small"
         )
-        embedding = response['data'][0]['embedding']
 
-        supabase.table("expert_profile").update({"embedding": embedding}).eq("id", profile_id).execute()
+        embedding = response.data[0].embedding  # <-- Правильный доступ!
+
+        supabase.table("expert_profile").update({"embedding": embedding}).eq("_id", profile_id).execute()
 
         return {"status": "updated", "id": profile_id}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
