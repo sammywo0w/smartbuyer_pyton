@@ -59,7 +59,7 @@ async def embed_hook(request: Request):
 
         # Получаем embedding через OpenAI
         response = openai.Embedding.create(
-            model="text-embedding-3-small",  # Можно сменить на нужную модель
+            model="text-embedding-ada-002",  # Можно сменить на нужную модель
             input=combined_text
         )
         embedding = response['data'][0]['embedding']
