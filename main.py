@@ -39,7 +39,7 @@ async def embed_hook(request: Request):
             raise HTTPException(status_code=400, detail="Missing 'id' or 'text'. Make sure both are provided.")
 
         # Запрос к OpenAI для получения embedding
-        response = openai.embedding.create(
+        response = openai.Embedding.create(
             model="text-embedding-ada-002",  # или другой нужный вам вариант модели
             input=text
         )
