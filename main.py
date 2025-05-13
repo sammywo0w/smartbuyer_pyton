@@ -4,9 +4,8 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client
 
-load_dotenv()
-
 # Загрузка переменных среды
+load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
@@ -16,22 +15,31 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
+# Утилита: безопасное преобразование в строку
+def safe_str(val):
+    if isinstance(val, list):
+        return " ".join(str(x) for x in val if x is not None)
+    return str(val) if val is not None else ""
+
+# Утилита: проверка изменений нужных полей
+def fields_updated(new, old, keys):
+    return any(new.get(k) != old.get(k) for k in keys)
+
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
     try:
-        # Получаем входные данные от Supabase Webhook
+        # Получение данных из webhook-запроса
         input_data = await request.json()
         print("🔥 Supabase payload:", input_data)
 
         record = input_data.get('record', {})
         old_record = input_data.get('old_record', {})
-
-        # Идентификатор профиля
         profile_id = record.get('_id')
-        if not profile_id:
-            raise ValueError("Missing '_id' in payload")
 
-        # Проверяем, изменились ли нужные поля
+        if not profile_id:
+            raise ValueError("Missing '_id' in record")
+
+        # Поля, по которым отслеживаются изменения
         fields_to_watch = [
             "about_me_text",
             "keyachievementssuccesses_text",
@@ -41,39 +49,37 @@ async def embed_hook(request: Request):
             "spec_areas_choise"
         ]
 
-        def fields_updated(new, old, keys):
-            return any(new.get(k) != old.get(k) for k in keys)
-
         if not fields_updated(record, old_record, fields_to_watch):
-            return {"message": "No relevant fields changed. Skipping embedding update."}
+            print("ℹ️ No relevant fields changed. Skipping update.")
+            return {"message": "No relevant fields changed."}
 
-        # Собираем текст для embedding
+        # Формируем текст для embedding
         combined_text = " ".join([
-            record.get("about_me_text", ""),
-            record.get("keyachievementssuccesses_text", ""),
-            record.get("current_role_text", ""),
-            record.get("searchfield", ""),
-            record.get("suppliers_choise", ""),
-            record.get("spec_areas_choise", "")
+            safe_str(record.get("about_me_text")),
+            safe_str(record.get("keyachievementssuccesses_text")),
+            safe_str(record.get("current_role_text")),
+            safe_str(record.get("searchfield")),
+            safe_str(record.get("suppliers_choise")),
+            safe_str(record.get("spec_areas_choise")),
         ])
 
-        # Получаем embedding через OpenAI
+        # Получение embedding от OpenAI
         response = openai.Embedding.create(
-            model="text-embedding-ada-002",  # Можно сменить на нужную модель
+            model="text-embedding-3-small",
             input=combined_text
         )
-        embedding = response['data'][0]['embedding']
-        print("✅ Embedding generated successfully")
+        embedding = response["data"][0]["embedding"]
+        print("✅ Embedding generated")
 
-        # Обновляем или вставляем embedding в отдельную таблицу
+        # Запись в таблицу expert_embedding
         supabase.table("expert_embedding").upsert({
             "_id": profile_id,
             "embedding": embedding
         }).execute()
+        print("✅ Embedding saved to expert_embedding")
 
         return {"status": "success", "_id": profile_id}
 
     except Exception as e:
         print("❌ Exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
