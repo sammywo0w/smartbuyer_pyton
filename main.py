@@ -3,6 +3,7 @@ import openai
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+import json
 
 load_dotenv()
 
@@ -22,16 +23,24 @@ async def embed_hook(request: Request):
         input_data = await request.json()
         print("🔥 Supabase payload:", input_data)
 
-        # Извлекаем нужные данные из запроса
-        text = input_data.get("text", "")
-        profile_id = input_data.get("id")
-
-        if not profile_id or not text:
-            raise ValueError(f"Missing 'id' or 'text'. Got id: {profile_id}, text: {text}")
+        # Извлекаем нужные данные из JSON
+        record = input_data.get('record', {})
+        profile_id = record.get('_id')
+        
+        # Получаем текстовые поля для embedding
+        about_me_text = record.get('about_me_text', '')
+        keyachievementssuccesses_text = record.get('keyachievementssuccesses_text', '')
+        current_role_text = record.get('current_role_text', '')
+        
+        # Собираем текст для отправки в OpenAI
+        text = f"{about_me_text} {keyachievementssuccesses_text} {current_role_text}"
+        
+        if not profile_id or not text.strip():
+            raise HTTPException(status_code=400, detail="Missing 'id' or 'text'. Make sure both are provided.")
 
         # Запрос к OpenAI для получения embedding
-        response = openai.embeddings.create(
-            model="text-embedding-ada-002",  # Можно выбрать подходящую модель
+        response = openai.Embedding.create(
+            model="text-embedding-ada-002",  # или другой нужный вам вариант модели
             input=text
         )
 
