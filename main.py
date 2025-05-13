@@ -1,43 +1,48 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 import openai
-import json
 import os
 from dotenv import load_dotenv
+from supabase import create_client
 
 load_dotenv()
 
+# Загрузка переменных среды
 openai.api_key = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+
+# Клиент Supabase
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
     try:
-        body = await request.json()
-        print("🔥 Parsed JSON:", body)
+        input_data = await request.json()
+        print("🔥 Supabase payload:", input_data)
 
-        # Извлечение необходимых полей из JSON
-        record = body.get('record', {})
-        about_me_text = record.get('about_me_text', '')
-        keyachievementssuccesses_text = record.get('keyachievementssuccesses_text', '')
-        current_role_text = record.get('current_role_text', '')
+        # Извлекаем нужные данные из запроса
+        text = input_data.get("text", "")
+        profile_id = input_data.get("id")
 
-        # Конкатенация всех нужных текстов для создания embedding
-        full_text = f"{about_me_text} {keyachievementssuccesses_text} {current_role_text}"
+        if not profile_id or not text:
+            raise ValueError(f"Missing 'id' or 'text'. Got id: {profile_id}, text: {text}")
 
-        # Генерация embedding
-        response = openai.Embedding.create(
-            input=full_text,
-            model="text-embedding-ada-002"
+        # Запрос к OpenAI для получения embedding
+        response = openai.embeddings.create(
+            model="text-embedding-ada-002",  # Можно выбрать подходящую модель
+            input=text
         )
 
         embedding = response['data'][0]['embedding']
         print("✅ Embedding generated successfully")
 
-        # Здесь можно сохранить embedding в базе данных или передать куда-то еще
+        # Обновление записи в базе данных Supabase
+        supabase.table("expert_profile").update({"embedding": embedding}).eq("_id", profile_id).execute()
 
-        return {"status": "success", "embedding": embedding}
+        return {"status": "success", "_id": profile_id}
 
     except Exception as e:
         print("❌ EXCEPTION:", str(e))
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
