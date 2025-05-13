@@ -1,27 +1,43 @@
 from fastapi import FastAPI, Request
+import openai
 import json
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 app = FastAPI()
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
     try:
-        # Просто выведем всё, что приходит
-        body_bytes = await request.body()
-        print("📦 Raw bytes:", body_bytes)
+        body = await request.json()
+        print("🔥 Parsed JSON:", body)
 
-        body_str = body_bytes.decode("utf-8")
-        print("📜 Decoded string:", body_str)
+        # Извлечение необходимых полей из JSON
+        record = body.get('record', {})
+        about_me_text = record.get('about_me_text', '')
+        keyachievementssuccesses_text = record.get('keyachievementssuccesses_text', '')
+        current_role_text = record.get('current_role_text', '')
 
-        try:
-            data = json.loads(body_str)
-            print("🔥 Parsed JSON:", data)
-        except Exception as json_err:
-            print("❌ JSON decode error:", json_err)
-            data = {}
+        # Конкатенация всех нужных текстов для создания embedding
+        full_text = f"{about_me_text} {keyachievementssuccesses_text} {current_role_text}"
 
-        return {"status": "ok", "raw": body_str, "parsed": data}
+        # Генерация embedding
+        response = openai.Embedding.create(
+            input=full_text,
+            model="text-embedding-ada-002"
+        )
+
+        embedding = response['data'][0]['embedding']
+        print("✅ Embedding generated successfully")
+
+        # Здесь можно сохранить embedding в базе данных или передать куда-то еще
+
+        return {"status": "success", "embedding": embedding}
 
     except Exception as e:
-        print("❌ General exception:", str(e))
+        print("❌ EXCEPTION:", str(e))
         return {"error": str(e)}
