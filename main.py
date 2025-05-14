@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
+from typing import List
 import openai
 import os
 from dotenv import load_dotenv
@@ -84,9 +85,6 @@ async def embed_hook(request: Request):
         print("❌ Exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-from fastapi import Query
-from typing import List
-
 @app.post("/search")
 async def search_similar_profiles(request: Request, top_k: int = Query(default=5)):
     try:
@@ -115,8 +113,3 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
     except Exception as e:
         print("❌ Search exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/search")
-async def search_similar_profiles(...):
-
-
