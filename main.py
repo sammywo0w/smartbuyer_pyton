@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from typing import List
 import openai
 import os
+import uuid
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -11,7 +12,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
-# Инициализация клиента Supabase
+# Инициализация Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
@@ -22,7 +23,7 @@ def safe_str(val):
         return " ".join(str(x) for x in val if x is not None)
     return str(val) if val is not None else ""
 
-# Проверка, были ли изменения в ключевых полях
+# Утилита: проверка изменений в ключевых полях
 def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
         return True
@@ -41,14 +42,13 @@ async def embed_hook(request: Request):
         if not profile_id:
             raise ValueError("Missing '_id' in record")
 
-        # Определяем, это hourly или эксперт
         is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
 
         if is_hourly:
             print("💼 Обработка hourlies")
             fields_to_watch = [
-                "title", "topics_text", "experience_b",
-                "hourly_overvi", "suppliers_list", "search_field"
+                "title", "topics_text", "experience_benefits_delivered",
+                "categories_list_custom_categories", "suppliers"
             ]
 
             if not fields_updated(record, old_record, fields_to_watch):
@@ -58,17 +58,16 @@ async def embed_hook(request: Request):
             combined_text = " ".join([
                 safe_str(record.get("title")),
                 safe_str(record.get("topics_text")),
-                safe_str(record.get("experience_b")),
-                safe_str(record.get("hourly_overvi")),
-                safe_str(record.get("suppliers_list")),
-                safe_str(record.get("search_field")),
+                safe_str(record.get("experience_benefits_delivered")),
+                safe_str(record.get("categories_list_custom_categories")),
+                safe_str(record.get("suppliers")),
             ])
         else:
             print("👤 Обработка expert_profile")
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
                 "current_role_text", "searchfield",
-                "suppliers_choise", "spec_areas_choise"
+                "suppliers_choise", "spec_areas_choise", "current_employer_name_text"
             ]
 
             if not fields_updated(record, old_record, fields_to_watch):
@@ -82,6 +81,7 @@ async def embed_hook(request: Request):
                 safe_str(record.get("searchfield")),
                 safe_str(record.get("suppliers_choise")),
                 safe_str(record.get("spec_areas_choise")),
+                safe_str(record.get("current_employer_name_text")),
             ])
 
         # Генерация embedding
@@ -92,18 +92,25 @@ async def embed_hook(request: Request):
         embedding = response["data"][0]["embedding"]
         print("✅ Embedding generated")
 
-        # Сохраняем в таблицу
+        # Генерируем id_embedding
+        if is_hourly:
+            id_embedding = str(uuid.uuid4())  # для новых hourlies всегда новый
+        else:
+            id_embedding = profile_id  # для expert'ов можно использовать _id
+
         embedding_record = {
+            "id_embedding": id_embedding,
             "_id": profile_id,
             "embedding": embedding
         }
+
         if is_hourly:
             embedding_record["hourlie_id"] = record.get("id_hourly")
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
         print("✅ Saved to expert_embedding")
 
-        return {"status": "success", "_id": profile_id}
+        return {"status": "success", "id_embedding": id_embedding}
 
     except Exception as e:
         print("❌ Exception:", str(e))
@@ -118,22 +125,18 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
         if not query_text:
             raise ValueError("Query is empty")
 
-        # Генерация embedding запроса
         response = openai.Embedding.create(
             model="text-embedding-3-small",
             input=query_text
         )
         query_embedding = response['data'][0]['embedding']
 
-        # Вызов search_embeddings (RPC функция Supabase)
         result = supabase.rpc("search_embeddings", {
             "query_embedding": query_embedding,
             "top_k": top_k
         }).execute()
 
         matches = result.data if result else []
-
-        # Просто возвращаем результат (с hourlie_id если есть)
         return {"results": matches}
 
     except Exception as e:
