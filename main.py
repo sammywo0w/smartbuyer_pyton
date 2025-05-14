@@ -103,25 +103,14 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
         )
         query_embedding = response['data'][0]['embedding']
 
-        # Выполняем SQL-запрос к Supabase (pgvector оператор cosine distance <#>)
-        sql = """
-            SELECT _id, 1 - (embedding <#> %s) AS similarity
-            FROM expert_embedding
-            ORDER BY embedding <#> %s
-            LIMIT %s;
-        """
+        # Вызываем RPC-функцию в Supabase
+        result = supabase.rpc("search_embeddings", {
+            "query_embedding": query_embedding,
+            "top_k": top_k
+        }).execute()
 
-        # Вызов raw SQL через postgrest может быть неудобен,
-        # поэтому лучше сделать это через Supabase RPC (если настроено)
-        # или psycopg2 / asyncpg — но для простоты мы используем Supabase REST
-
-        # Прямого метода RPC с raw SQL через supabase-py нет,
-        # поэтому ПОДСКАЖИ, если хочешь — я помогу сделать SQL-функцию в Supabase,
-        # тогда тут можно будет вызвать `.rpc("search_embeddings", { ... })`
-
-        return {
-            "message": "❗ Для поиска лучше настроить Supabase RPC или direct DB access"
-        }
+        matches = result.data if result else []
+        return {"results": matches}
 
     except Exception as e:
         print("❌ Search exception:", str(e))
