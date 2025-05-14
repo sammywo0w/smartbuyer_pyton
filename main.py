@@ -116,3 +116,7 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
         print("❌ Search exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/search")
+async def search_similar_profiles(...):
+
+
