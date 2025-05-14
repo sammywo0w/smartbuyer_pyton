@@ -22,16 +22,15 @@ def safe_str(val):
         return " ".join(str(x) for x in val if x is not None)
     return str(val) if val is not None else ""
 
-# Утилита: проверка изменений нужных полей
+# Проверка, были ли изменения в ключевых полях
 def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
-        return True  # Если вдруг нет данных — лучше перестраховаться
+        return True
     return any(new.get(k) != old.get(k) for k in keys)
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
     try:
-        # Получение данных из webhook-запроса
         input_data = await request.json()
         print("🔥 Supabase payload:", input_data)
 
@@ -42,23 +41,18 @@ async def embed_hook(request: Request):
         if not profile_id:
             raise ValueError("Missing '_id' in record")
 
-        # Определим, откуда пришёл webhook — по полям hourlies
+        # Определяем, это hourly или эксперт
         is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
 
         if is_hourly:
             print("💼 Обработка hourlies")
-
             fields_to_watch = [
-                "title",
-                "topics_text",
-                "experience_b",
-                "hourly_overvi",
-                "suppliers_list",
-                "search_field"
+                "title", "topics_text", "experience_b",
+                "hourly_overvi", "suppliers_list", "search_field"
             ]
 
             if not fields_updated(record, old_record, fields_to_watch):
-                print("ℹ️ Hourly: no relevant fields changed. Skipping update.")
+                print("ℹ️ Hourly: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (hourlies)."}
 
             combined_text = " ".join([
@@ -69,21 +63,16 @@ async def embed_hook(request: Request):
                 safe_str(record.get("suppliers_list")),
                 safe_str(record.get("search_field")),
             ])
-
         else:
             print("👤 Обработка expert_profile")
-
             fields_to_watch = [
-                "about_me_text",
-                "keyachievementssuccesses_text",
-                "current_role_text",
-                "searchfield",
-                "suppliers_choise",
-                "spec_areas_choise"
+                "about_me_text", "keyachievementssuccesses_text",
+                "current_role_text", "searchfield",
+                "suppliers_choise", "spec_areas_choise"
             ]
 
             if not fields_updated(record, old_record, fields_to_watch):
-                print("ℹ️ Expert: no relevant fields changed. Skipping update.")
+                print("ℹ️ Expert: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (expert)."}
 
             combined_text = " ".join([
@@ -95,7 +84,7 @@ async def embed_hook(request: Request):
                 safe_str(record.get("spec_areas_choise")),
             ])
 
-        # Получение embedding от OpenAI
+        # Генерация embedding
         response = openai.Embedding.create(
             model="text-embedding-3-small",
             input=combined_text
@@ -103,17 +92,16 @@ async def embed_hook(request: Request):
         embedding = response["data"][0]["embedding"]
         print("✅ Embedding generated")
 
-        # Сборка записи для сохранения
+        # Сохраняем в таблицу
         embedding_record = {
             "_id": profile_id,
             "embedding": embedding
         }
-
         if is_hourly:
             embedding_record["hourlie_id"] = record.get("id_hourly")
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
-        print("✅ Embedding saved to expert_embedding")
+        print("✅ Saved to expert_embedding")
 
         return {"status": "success", "_id": profile_id}
 
@@ -127,24 +115,25 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
     try:
         data = await request.json()
         query_text = data.get("query", "")
-
         if not query_text:
             raise ValueError("Query is empty")
 
-        # Получаем embedding от OpenAI
+        # Генерация embedding запроса
         response = openai.Embedding.create(
             model="text-embedding-3-small",
             input=query_text
         )
         query_embedding = response['data'][0]['embedding']
 
-        # Вызываем RPC-функцию в Supabase
+        # Вызов search_embeddings (RPC функция Supabase)
         result = supabase.rpc("search_embeddings", {
             "query_embedding": query_embedding,
             "top_k": top_k
         }).execute()
 
         matches = result.data if result else []
+
+        # Просто возвращаем результат (с hourlie_id если есть)
         return {"results": matches}
 
     except Exception as e:
