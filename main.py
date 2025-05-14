@@ -24,6 +24,8 @@ def safe_str(val):
 
 # Утилита: проверка изменений нужных полей
 def fields_updated(new, old, keys):
+    if not isinstance(new, dict) or not isinstance(old, dict):
+        return True  # Если вдруг нет данных — лучше перестраховаться
     return any(new.get(k) != old.get(k) for k in keys)
 
 @app.post("/embed-hook")
@@ -33,15 +35,15 @@ async def embed_hook(request: Request):
         input_data = await request.json()
         print("🔥 Supabase payload:", input_data)
 
-        record = input_data.get('record', {})
-        old_record = input_data.get('old_record', {})
+        record = input_data.get('record') or {}
+        old_record = input_data.get('old_record') or {}
         profile_id = record.get('_id')
 
         if not profile_id:
             raise ValueError("Missing '_id' in record")
 
-        # Определим, откуда пришёл webhook — по наличию полей
-        is_hourly = record.get("title") and record.get("topics_text")
+        # Определим, откуда пришёл webhook — по полям hourlies
+        is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
 
         if is_hourly:
             print("💼 Обработка hourlies")
