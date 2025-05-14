@@ -101,12 +101,20 @@ async def embed_hook(request: Request):
         embedding = response["data"][0]["embedding"]
         print("✅ Embedding generated")
 
-        # Запись в expert_embedding
-        supabase.table("expert_embedding").upsert({
-            "_id": profile_id,
-            "embedding": embedding
-        }).execute()
-        print("✅ Embedding saved to expert_embedding")
+        # Определяем, это hourly или эксперт
+is_hourly = record.get("title") and record.get("topics_text")
+
+embedding_record = {
+    "_id": profile_id,
+    "embedding": embedding
+}
+
+# Если hourlies — добавляем hourlie_id
+if is_hourly:
+    embedding_record["hourlie_id"] = record.get("id_hourly")
+
+supabase.table("expert_embedding").upsert(embedding_record).execute()
+
 
         return {"status": "success", "_id": profile_id}
 
