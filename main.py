@@ -40,29 +40,58 @@ async def embed_hook(request: Request):
         if not profile_id:
             raise ValueError("Missing '_id' in record")
 
-        # Поля, по которым отслеживаются изменения
-        fields_to_watch = [
-            "about_me_text",
-            "keyachievementssuccesses_text",
-            "current_role_text",
-            "searchfield",
-            "suppliers_choise",
-            "spec_areas_choise"
-        ]
+        # Определим, откуда пришёл webhook — по наличию полей
+        is_hourly = record.get("title") and record.get("topics_text")
 
-        if not fields_updated(record, old_record, fields_to_watch):
-            print("ℹ️ No relevant fields changed. Skipping update.")
-            return {"message": "No relevant fields changed."}
+        if is_hourly:
+            print("💼 Обработка hourlies")
 
-        # Формируем текст для embedding
-        combined_text = " ".join([
-            safe_str(record.get("about_me_text")),
-            safe_str(record.get("keyachievementssuccesses_text")),
-            safe_str(record.get("current_role_text")),
-            safe_str(record.get("searchfield")),
-            safe_str(record.get("suppliers_choise")),
-            safe_str(record.get("spec_areas_choise")),
-        ])
+            fields_to_watch = [
+                "title",
+                "topics_text",
+                "experience_b",
+                "hourly_overvi",
+                "suppliers_list",
+                "search_field"
+            ]
+
+            if not fields_updated(record, old_record, fields_to_watch):
+                print("ℹ️ Hourly: no relevant fields changed. Skipping update.")
+                return {"message": "No relevant fields changed (hourlies)."}
+
+            combined_text = " ".join([
+                safe_str(record.get("title")),
+                safe_str(record.get("topics_text")),
+                safe_str(record.get("experience_b")),
+                safe_str(record.get("hourly_overvi")),
+                safe_str(record.get("suppliers_list")),
+                safe_str(record.get("search_field")),
+            ])
+
+        else:
+            print("👤 Обработка expert_profile")
+
+            fields_to_watch = [
+                "about_me_text",
+                "keyachievementssuccesses_text",
+                "current_role_text",
+                "searchfield",
+                "suppliers_choise",
+                "spec_areas_choise"
+            ]
+
+            if not fields_updated(record, old_record, fields_to_watch):
+                print("ℹ️ Expert: no relevant fields changed. Skipping update.")
+                return {"message": "No relevant fields changed (expert)."}
+
+            combined_text = " ".join([
+                safe_str(record.get("about_me_text")),
+                safe_str(record.get("keyachievementssuccesses_text")),
+                safe_str(record.get("current_role_text")),
+                safe_str(record.get("searchfield")),
+                safe_str(record.get("suppliers_choise")),
+                safe_str(record.get("spec_areas_choise")),
+            ])
 
         # Получение embedding от OpenAI
         response = openai.Embedding.create(
@@ -72,7 +101,7 @@ async def embed_hook(request: Request):
         embedding = response["data"][0]["embedding"]
         print("✅ Embedding generated")
 
-        # Запись в таблицу expert_embedding
+        # Запись в expert_embedding
         supabase.table("expert_embedding").upsert({
             "_id": profile_id,
             "embedding": embedding
@@ -84,6 +113,7 @@ async def embed_hook(request: Request):
     except Exception as e:
         print("❌ Exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/search")
 async def search_similar_profiles(request: Request, top_k: int = Query(default=5)):
