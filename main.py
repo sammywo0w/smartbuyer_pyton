@@ -124,6 +124,10 @@ async def search_similar_profiles(request: Request):
     try:
         data = await request.json()
         query_text = data.get("query", "")
+        filter_category = data.get("category")
+        filter_skills = data.get("skills")
+        filter_badges = data.get("badges")
+
         if not query_text:
             raise ValueError("Query is empty")
 
@@ -135,7 +139,10 @@ async def search_similar_profiles(request: Request):
         print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
-            "query_embedding": query_embedding
+            "query_embedding": query_embedding,
+            "filter_category": filter_category,
+            "filter_skills": filter_skills,
+            "filter_badges": filter_badges
         }).execute()
 
         matches = result.data if result else []
