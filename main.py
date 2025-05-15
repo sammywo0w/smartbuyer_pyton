@@ -16,18 +16,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-
 def safe_str(val):
     if isinstance(val, list):
         return " ".join(str(x) for x in val if x is not None)
     return str(val) if val is not None else ""
 
-
 def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
         return True
     return any(new.get(k) != old.get(k) for k in keys)
-
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
@@ -61,7 +58,7 @@ async def embed_hook(request: Request):
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
                 "current_role_text", "searchfield",
-                "suppliers_choise", "spec_areas_choise", "current_employer_name_text"
+                "suppliers_choise", "spec_areas_choise", "current_employer_name_text", "categories_list_custom_categories"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
                 return {"message": "No relevant fields changed (expert)."}
@@ -92,7 +89,8 @@ async def embed_hook(request: Request):
         )
         embedding = response["data"][0]["embedding"]
 
-        id_embedding = str(uuid.uuid4()) if is_hourly else _id
+        # ✅ Надёжный id_embedding
+        id_embedding = record.get("id_hourly") if is_hourly else _id
 
         embedding_record = {
             "id_embedding": id_embedding,
@@ -112,27 +110,17 @@ async def embed_hook(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/search")
 async def search_similar_profiles(request: Request):
     try:
         data = await request.json()
         query_text = data.get("query", "")
-        filter_category = data.get("category")
+        filter_category = data.get("category") or None
         filter_skills = data.get("skills") or []
         filter_badges = data.get("badges") or []
 
         if not query_text:
             raise ValueError("Query is empty")
-
-        # Убедимся, что skills и badges — списки строк
-        if not isinstance(filter_skills, list):
-            filter_skills = [filter_skills]
-        filter_skills = list(map(str, filter_skills))
-
-        if not isinstance(filter_badges, list):
-            filter_badges = [filter_badges]
-        filter_badges = list(map(str, filter_badges))
 
         response = openai.Embedding.create(
             model="text-embedding-ada-002",
@@ -146,15 +134,14 @@ async def search_similar_profiles(request: Request):
 
         matches = result.data if result else []
 
-        # 🔍 Пост-фильтрация
         if filter_category:
-            matches = [m for m in matches if str(m.get("category")) == str(filter_category)]
+            matches = [m for m in matches if m.get("category") == filter_category]
 
         if filter_skills:
-            matches = [m for m in matches if set(filter_skills) & set(map(str, m.get("skills") or []))]
+            matches = [m for m in matches if set(filter_skills) & set(m.get("skills") or [])]
 
         if filter_badges:
-            matches = [m for m in matches if set(filter_badges) & set(map(str, m.get("badges") or []))]
+            matches = [m for m in matches if set(filter_badges) & set(m.get("badges") or [])]
 
         return {"results": matches}
 
