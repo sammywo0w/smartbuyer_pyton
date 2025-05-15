@@ -114,7 +114,7 @@ async def embed_hook(request: Request):
 
 
 @app.post("/search")
-async def search_similar_profiles(request: Request, top_k: int = Query(default=10)):
+async def search_similar_profiles(request: Request):
     try:
         data = await request.json()
         query_text = data.get("query", "")
@@ -130,9 +130,9 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=1
         print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
-            "query_embedding": query_embedding,
-            "top_k": top_k
-        }).execute()
+    "query_embedding": query_embedding
+}).execute()
+
 
         matches = result.data if result else []
         print(f"✅ Found {len(matches)} matches")
