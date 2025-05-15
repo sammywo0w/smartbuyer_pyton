@@ -37,9 +37,9 @@ async def embed_hook(request: Request):
 
         record = input_data.get('record') or {}
         old_record = input_data.get('old_record') or {}
-        profile_id = record.get('_id')
+        _id = record.get('_id')
 
-        if not profile_id:
+        if not _id:
             raise ValueError("Missing '_id' in record")
 
         is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
@@ -74,7 +74,18 @@ async def embed_hook(request: Request):
                 print("ℹ️ Expert: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (expert)."}
 
+            # Загрузка дополнительных данных по _id из user_data_bubble
+            user_data_result = supabase.table("user_data_bubble")\
+                .select("firstname_text, lastname_text, email, user_status_option_user_status0")\
+                .eq("_id", _id).execute()
+
+            user_data = user_data_result.data[0] if user_data_result.data else {}
+
             combined_text = " ".join([
+                safe_str(user_data.get("firstname_text")),
+                safe_str(user_data.get("lastname_text")),
+                safe_str(user_data.get("email")),
+                safe_str(user_data.get("user_status_option_user_status0")),
                 safe_str(record.get("about_me_text")),
                 safe_str(record.get("keyachievementssuccesses_text")),
                 safe_str(record.get("current_role_text")),
@@ -92,11 +103,11 @@ async def embed_hook(request: Request):
         embedding = response["data"][0]["embedding"]
         print(f"✅ Embedding generated. Length: {len(embedding)}")
 
-        id_embedding = str(uuid.uuid4()) if is_hourly else profile_id
+        id_embedding = str(uuid.uuid4()) if is_hourly else _id
 
         embedding_record = {
             "id_embedding": id_embedding,
-            "_id": profile_id,
+            "_id": _id,
             "embedding": embedding
         }
 
@@ -130,9 +141,8 @@ async def search_similar_profiles(request: Request):
         print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
-    "query_embedding": query_embedding
-}).execute()
-
+            "query_embedding": query_embedding
+        }).execute()
 
         matches = result.data if result else []
         print(f"✅ Found {len(matches)} matches")
