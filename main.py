@@ -5,7 +5,7 @@ import traceback
 from dotenv import load_dotenv
 from supabase import create_client
 
-# 🔧 Загрузка переменных среды
+# Загрузка переменных среды
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -25,6 +25,13 @@ def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
         return True
     return any(new.get(k) != old.get(k) for k in keys)
+
+def is_valid_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(val)
+        return True
+    except:
+        return False
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
@@ -67,6 +74,7 @@ async def embed_hook(request: Request):
             user_data_result = supabase.table("user_data_bubble") \
                 .select("firstname_text, lastname_text, email, user_status_option_user_status0") \
                 .eq("_id", _id).execute()
+
             user_data = user_data_result.data[0] if user_data_result.data else {}
 
             combined_text = " ".join([
@@ -89,20 +97,21 @@ async def embed_hook(request: Request):
         )
         embedding = response["data"][0]["embedding"]
 
-        # Установка hourlie_id только если это hourlie
-        hourlie_id = record.get("id_hourly") if is_hourly else None
+        hourlie_id = record.get("id_hourly")
+        if not is_hourly or not is_valid_uuid(str(hourlie_id)):
+            hourlie_id = None
 
         embedding_record = {
             "_id": _id,
             "embedding": embedding,
-            "category": record.get("categories_list_custom_categories"),
+            "category": record.get("categories_list_custom_categories") or [],
             "skills": record.get("suppliers_choise") or [],
             "badges": record.get("spec_areas_choise") or [],
             "hourlie_id": hourlie_id
         }
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
-        return {"status": "success"}
+        return {"status": "success", "updated": _id}
 
     except Exception as e:
         print("❌ Exception in /embed-hook:", str(e))
@@ -114,9 +123,6 @@ async def search_similar_profiles(request: Request):
     try:
         data = await request.json()
         query_text = data.get("query", "")
-        filter_category = data.get("category") or None
-        filter_skills = data.get("skills") or []
-        filter_badges = data.get("badges") or []
 
         if not query_text:
             raise ValueError("Query is empty")
@@ -132,14 +138,6 @@ async def search_similar_profiles(request: Request):
         }).execute()
 
         matches = result.data if result else []
-
-        if filter_category:
-            matches = [m for m in matches if m.get("category") == filter_category]
-        if filter_skills:
-            matches = [m for m in matches if set(filter_skills) & set(m.get("skills") or [])]
-        if filter_badges:
-            matches = [m for m in matches if set(filter_badges) & set(m.get("badges") or [])]
-
         return {"results": matches}
 
     except Exception as e:
