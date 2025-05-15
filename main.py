@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 import openai
 import os
 import uuid
+import traceback
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -109,7 +110,7 @@ async def embed_hook(request: Request):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    import traceback
+
 @app.post("/search")
 async def search_similar_profiles(request: Request):
     try:
