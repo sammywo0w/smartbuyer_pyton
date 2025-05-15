@@ -3,6 +3,7 @@ import openai
 import os
 import uuid
 import traceback
+import re
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -16,6 +17,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
+
+UUID_REGEX = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+def is_valid_uuid(val: str) -> bool:
+    return bool(UUID_REGEX.match(val))
 
 def safe_str(val):
     if isinstance(val, list):
@@ -91,7 +99,11 @@ async def embed_hook(request: Request):
         )
         embedding = response["data"][0]["embedding"]
 
-        id_embedding = record.get("id_hourly") if is_hourly else _id
+        hourlie_id = record.get("id_hourly")
+        if not is_hourly or not is_valid_uuid(str(hourlie_id)):
+            hourlie_id = None
+
+        id_embedding = hourlie_id if is_hourly else _id
 
         embedding_record = {
             "id_embedding": id_embedding,
@@ -100,7 +112,7 @@ async def embed_hook(request: Request):
             "category": record.get("categories_list_custom_categories"),
             "skills": record.get("suppliers_choise") or [],
             "badges": record.get("spec_areas_choise") or [],
-            "hourlie_id": record.get("id_hourly") if is_hourly else None  # Всегда есть
+            "hourlie_id": hourlie_id
         }
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
@@ -150,3 +162,4 @@ async def search_similar_profiles(request: Request):
         print("❌ Exception in /search:", str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
