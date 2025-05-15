@@ -16,18 +16,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-
 def safe_str(val):
     if isinstance(val, list):
         return " ".join(str(x) for x in val if x is not None)
     return str(val) if val is not None else ""
 
-
 def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
         return True
     return any(new.get(k) != old.get(k) for k in keys)
-
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
@@ -35,9 +32,9 @@ async def embed_hook(request: Request):
         input_data = await request.json()
         print("🔥 Supabase payload:", input_data)
 
-        record = input_data.get('record') or {}
-        old_record = input_data.get('old_record') or {}
-        _id = record.get('_id')
+        record = input_data.get("record") or {}
+        old_record = input_data.get("old_record") or {}
+        _id = record.get("_id")
 
         if not _id:
             raise ValueError("Missing '_id' in record")
@@ -50,7 +47,6 @@ async def embed_hook(request: Request):
                 "title", "topics_text", "experience_benefits_delivered",
                 "categories_list_custom_categories", "suppliers"
             ]
-
             if not fields_updated(record, old_record, fields_to_watch):
                 print("ℹ️ Hourly: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (hourlies)."}
@@ -69,12 +65,10 @@ async def embed_hook(request: Request):
                 "current_role_text", "searchfield",
                 "suppliers_choise", "spec_areas_choise", "current_employer_name_text"
             ]
-
             if not fields_updated(record, old_record, fields_to_watch):
                 print("ℹ️ Expert: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (expert)."}
 
-            # Загрузка дополнительных данных по _id из user_data_bubble
             user_data_result = supabase.table("user_data_bubble")\
                 .select("firstname_text, lastname_text, email, user_status_option_user_status0")\
                 .eq("_id", _id).execute()
@@ -95,7 +89,6 @@ async def embed_hook(request: Request):
                 safe_str(record.get("current_employer_name_text")),
             ])
 
-        # Генерация embedding
         response = openai.Embedding.create(
             model="text-embedding-ada-002",
             input=combined_text
@@ -108,7 +101,10 @@ async def embed_hook(request: Request):
         embedding_record = {
             "id_embedding": id_embedding,
             "_id": _id,
-            "embedding": embedding
+            "embedding": embedding,
+            "category": record.get("categories_list_custom_categories"),
+            "skills": record.get("suppliers_choise"),
+            "badges": record.get("spec_areas_choise")
         }
 
         if is_hourly:
@@ -123,7 +119,6 @@ async def embed_hook(request: Request):
         print("❌ Exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/search")
 async def search_similar_profiles(request: Request):
     try:
@@ -132,12 +127,11 @@ async def search_similar_profiles(request: Request):
         if not query_text:
             raise ValueError("Query is empty")
 
-        # Генерация embedding
         response = openai.Embedding.create(
             model="text-embedding-ada-002",
             input=query_text
         )
-        query_embedding = response['data'][0]['embedding']
+        query_embedding = response["data"][0]["embedding"]
         print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
