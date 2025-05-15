@@ -86,7 +86,7 @@ async def embed_hook(request: Request):
 
         # Генерация embedding
         response = openai.Embedding.create(
-            model="text-embedding-3-small",
+            model="text-embedding-ada-002",
             input=combined_text
         )
         embedding = response["data"][0]["embedding"]
@@ -126,7 +126,7 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=5
             raise ValueError("Query is empty")
 
         response = openai.Embedding.create(
-            model="text-embedding-3-small",
+            model="text-embedding-ada-002",
             input=query_text
         )
         query_embedding = response['data'][0]['embedding']
