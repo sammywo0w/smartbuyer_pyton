@@ -145,7 +145,10 @@ async def search_similar_profiles(request: Request):
 
         return {"results": matches}
 
-    except Exception as e:
+    import traceback
+
+# ...
+except Exception as e:
     print("❌ Exception in /embed-hook:", str(e))
     traceback.print_exc()  # Показывает стек вызовов для отладки
     raise HTTPException(status_code=500, detail=str(e))
