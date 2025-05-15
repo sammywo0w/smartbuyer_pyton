@@ -99,11 +99,9 @@ async def embed_hook(request: Request):
             "embedding": embedding,
             "category": record.get("categories_list_custom_categories"),
             "skills": record.get("suppliers_choise") or [],
-            "badges": record.get("spec_areas_choise") or []
+            "badges": record.get("spec_areas_choise") or [],
+            "hourlie_id": record.get("id_hourly") if is_hourly else None  # Всегда есть
         }
-
-        if is_hourly:
-            embedding_record["hourlie_id"] = record.get("id_hourly")
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
         return {"status": "success", "id_embedding": id_embedding}
