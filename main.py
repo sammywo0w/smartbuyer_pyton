@@ -109,7 +109,7 @@ async def embed_hook(request: Request):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    import traceback
 @app.post("/search")
 async def search_similar_profiles(request: Request):
     try:
@@ -145,7 +145,6 @@ async def search_similar_profiles(request: Request):
 
         return {"results": matches}
 
-    import traceback
 
 # ...
 except Exception as e:
