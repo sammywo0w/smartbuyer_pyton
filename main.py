@@ -96,8 +96,8 @@ async def embed_hook(request: Request):
             "_id": _id,
             "embedding": embedding,
             "category": record.get("categories_list_custom_categories"),
-            "skills": record.get("suppliers_choise"),
-            "badges": record.get("spec_areas_choise")
+            "skills": record.get("suppliers_choise") or [],
+            "badges": record.get("spec_areas_choise") or []
         }
 
         if is_hourly:
@@ -114,7 +114,7 @@ async def search_similar_profiles(request: Request):
     try:
         data = await request.json()
         query_text = data.get("query", "")
-        filter_category = data.get("category")
+        filter_category = data.get("category") or None
         filter_skills = data.get("skills") or []
         filter_badges = data.get("badges") or []
 
@@ -133,7 +133,6 @@ async def search_similar_profiles(request: Request):
 
         matches = result.data if result else []
 
-        # 🔍 Пост-фильтрация
         if filter_category:
             matches = [m for m in matches if m.get("category") == filter_category]
 
