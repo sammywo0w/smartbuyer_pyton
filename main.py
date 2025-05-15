@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request
 import openai
 import os
+import uuid
 import traceback
+import ast
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -32,6 +34,16 @@ def is_valid_uuid(val: str) -> bool:
         return True
     except:
         return False
+
+def ensure_list(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except:
+            return []
+    return []
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
@@ -104,9 +116,9 @@ async def embed_hook(request: Request):
         embedding_record = {
             "_id": _id,
             "embedding": embedding,
-            "category": record.get("categories_list_custom_categories") or [],
-            "skills": record.get("suppliers_choise") or [],
-            "badges": record.get("spec_areas_choise") or [],
+            "category": ensure_list(record.get("categories_list_custom_categories")),
+            "skills": ensure_list(record.get("suppliers_choise")),
+            "badges": ensure_list(record.get("spec_areas_choise")),
             "hourlie_id": hourlie_id
         }
 
