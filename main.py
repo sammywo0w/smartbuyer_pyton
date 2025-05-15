@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request
 import openai
 import os
 import uuid
@@ -30,8 +30,6 @@ def fields_updated(new, old, keys):
 async def embed_hook(request: Request):
     try:
         input_data = await request.json()
-        print("🔥 Supabase payload:", input_data)
-
         record = input_data.get("record") or {}
         old_record = input_data.get("old_record") or {}
         _id = record.get("_id")
@@ -42,13 +40,11 @@ async def embed_hook(request: Request):
         is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
 
         if is_hourly:
-            print("💼 Обработка hourlies")
             fields_to_watch = [
                 "title", "topics_text", "experience_benefits_delivered",
                 "categories_list_custom_categories", "suppliers"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
-                print("ℹ️ Hourly: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (hourlies)."}
 
             combined_text = " ".join([
@@ -59,14 +55,12 @@ async def embed_hook(request: Request):
                 safe_str(record.get("suppliers")),
             ])
         else:
-            print("👤 Обработка expert_profile")
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
                 "current_role_text", "searchfield",
                 "suppliers_choise", "spec_areas_choise", "current_employer_name_text"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
-                print("ℹ️ Expert: no relevant fields changed. Skipping.")
                 return {"message": "No relevant fields changed (expert)."}
 
             user_data_result = supabase.table("user_data_bubble")\
@@ -94,7 +88,6 @@ async def embed_hook(request: Request):
             input=combined_text
         )
         embedding = response["data"][0]["embedding"]
-        print(f"✅ Embedding generated. Length: {len(embedding)}")
 
         id_embedding = str(uuid.uuid4()) if is_hourly else _id
 
@@ -111,12 +104,9 @@ async def embed_hook(request: Request):
             embedding_record["hourlie_id"] = record.get("id_hourly")
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
-        print("✅ Saved to expert_embedding")
-
         return {"status": "success", "id_embedding": id_embedding}
 
     except Exception as e:
-        print("❌ Exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search")
@@ -125,8 +115,8 @@ async def search_similar_profiles(request: Request):
         data = await request.json()
         query_text = data.get("query", "")
         filter_category = data.get("category")
-        filter_skills = data.get("skills")
-        filter_badges = data.get("badges")
+        filter_skills = data.get("skills") or []
+        filter_badges = data.get("badges") or []
 
         if not query_text:
             raise ValueError("Query is empty")
@@ -136,19 +126,24 @@ async def search_similar_profiles(request: Request):
             input=query_text
         )
         query_embedding = response["data"][0]["embedding"]
-        print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
-            "query_embedding": query_embedding,
-            "filter_category": filter_category,
-            "filter_skills": filter_skills,
-            "filter_badges": filter_badges
+            "query_embedding": query_embedding
         }).execute()
 
         matches = result.data if result else []
-        print(f"✅ Found {len(matches)} matches")
+
+        # 🔍 Пост-фильтрация
+        if filter_category:
+            matches = [m for m in matches if m.get("category") == filter_category]
+
+        if filter_skills:
+            matches = [m for m in matches if set(filter_skills) & set(m.get("skills") or [])]
+
+        if filter_badges:
+            matches = [m for m in matches if set(filter_badges) & set(m.get("badges") or [])]
+
         return {"results": matches}
 
     except Exception as e:
-        print("❌ Search exception:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
