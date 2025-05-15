@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, Request, Query
-from typing import List
 import openai
 import os
 import uuid
@@ -17,17 +16,18 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
 
-# Утилита: безопасное преобразование в строку
+
 def safe_str(val):
     if isinstance(val, list):
         return " ".join(str(x) for x in val if x is not None)
     return str(val) if val is not None else ""
 
-# Утилита: проверка изменений в ключевых полях
+
 def fields_updated(new, old, keys):
     if not isinstance(new, dict) or not isinstance(old, dict):
         return True
     return any(new.get(k) != old.get(k) for k in keys)
+
 
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
@@ -90,13 +90,9 @@ async def embed_hook(request: Request):
             input=combined_text
         )
         embedding = response["data"][0]["embedding"]
-        print("✅ Embedding generated")
+        print(f"✅ Embedding generated. Length: {len(embedding)}")
 
-        # Генерируем id_embedding
-        if is_hourly:
-            id_embedding = str(uuid.uuid4())  # для новых hourlies всегда новый
-        else:
-            id_embedding = profile_id  # для expert'ов можно использовать _id
+        id_embedding = str(uuid.uuid4()) if is_hourly else profile_id
 
         embedding_record = {
             "id_embedding": id_embedding,
@@ -118,18 +114,20 @@ async def embed_hook(request: Request):
 
 
 @app.post("/search")
-async def search_similar_profiles(request: Request, top_k: int = Query(default=1536)):
+async def search_similar_profiles(request: Request, top_k: int = Query(default=10)):
     try:
         data = await request.json()
         query_text = data.get("query", "")
         if not query_text:
             raise ValueError("Query is empty")
 
+        # Генерация embedding
         response = openai.Embedding.create(
             model="text-embedding-ada-002",
             input=query_text
         )
         query_embedding = response['data'][0]['embedding']
+        print(f"🔎 Query embedding length: {len(query_embedding)}")
 
         result = supabase.rpc("search_embeddings", {
             "query_embedding": query_embedding,
@@ -137,6 +135,7 @@ async def search_similar_profiles(request: Request, top_k: int = Query(default=1
         }).execute()
 
         matches = result.data if result else []
+        print(f"✅ Found {len(matches)} matches")
         return {"results": matches}
 
     except Exception as e:
