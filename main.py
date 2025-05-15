@@ -118,7 +118,7 @@ async def embed_hook(request: Request):
 
 
 @app.post("/search")
-async def search_similar_profiles(request: Request, top_k: int = Query(default=5)):
+async def search_similar_profiles(request: Request, top_k: int = Query(default=1536)):
     try:
         data = await request.json()
         query_text = data.get("query", "")
