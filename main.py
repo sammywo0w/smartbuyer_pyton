@@ -1,13 +1,11 @@
 from fastapi import FastAPI, HTTPException, Request
 import openai
 import os
-import uuid
 import traceback
-import re
 from dotenv import load_dotenv
 from supabase import create_client
 
-# Загрузка переменных среды
+# 🔧 Загрузка переменных среды
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -17,13 +15,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
-
-UUID_REGEX = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
-
-def is_valid_uuid(val: str) -> bool:
-    return bool(UUID_REGEX.match(val))
 
 def safe_str(val):
     if isinstance(val, list):
@@ -76,7 +67,6 @@ async def embed_hook(request: Request):
             user_data_result = supabase.table("user_data_bubble") \
                 .select("firstname_text, lastname_text, email, user_status_option_user_status0") \
                 .eq("_id", _id).execute()
-
             user_data = user_data_result.data[0] if user_data_result.data else {}
 
             combined_text = " ".join([
@@ -99,14 +89,10 @@ async def embed_hook(request: Request):
         )
         embedding = response["data"][0]["embedding"]
 
-        hourlie_id = record.get("id_hourly")
-        if not is_hourly or not is_valid_uuid(str(hourlie_id)):
-            hourlie_id = None
-
-        id_embedding = hourlie_id if is_hourly else _id
+        # Установка hourlie_id только если это hourlie
+        hourlie_id = record.get("id_hourly") if is_hourly else None
 
         embedding_record = {
-            "id_embedding": id_embedding,
             "_id": _id,
             "embedding": embedding,
             "category": record.get("categories_list_custom_categories"),
@@ -116,7 +102,7 @@ async def embed_hook(request: Request):
         }
 
         supabase.table("expert_embedding").upsert(embedding_record).execute()
-        return {"status": "success", "id_embedding": id_embedding}
+        return {"status": "success"}
 
     except Exception as e:
         print("❌ Exception in /embed-hook:", str(e))
@@ -149,10 +135,8 @@ async def search_similar_profiles(request: Request):
 
         if filter_category:
             matches = [m for m in matches if m.get("category") == filter_category]
-
         if filter_skills:
             matches = [m for m in matches if set(filter_skills) & set(m.get("skills") or [])]
-
         if filter_badges:
             matches = [m for m in matches if set(filter_badges) & set(m.get("badges") or [])]
 
@@ -162,4 +146,3 @@ async def search_similar_profiles(request: Request):
         print("❌ Exception in /search:", str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
