@@ -59,13 +59,14 @@ async def embed_hook(request: Request):
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
                 "current_role_text", "searchfield",
-                "suppliers_choise", "spec_areas_choise", "current_employer_name_text", "categories_list_custom_categories"
+                "suppliers_choise", "spec_areas_choise", "current_employer_name_text",
+                "categories_list_custom_categories"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
                 return {"message": "No relevant fields changed (expert)."}
 
-            user_data_result = supabase.table("user_data_bubble")\
-                .select("firstname_text, lastname_text, email, user_status_option_user_status0")\
+            user_data_result = supabase.table("user_data_bubble") \
+                .select("firstname_text, lastname_text, email, user_status_option_user_status0") \
                 .eq("_id", _id).execute()
 
             user_data = user_data_result.data[0] if user_data_result.data else {}
@@ -90,7 +91,6 @@ async def embed_hook(request: Request):
         )
         embedding = response["data"][0]["embedding"]
 
-        # ✅ Надёжный id_embedding
         id_embedding = record.get("id_hourly") if is_hourly else _id
 
         embedding_record = {
@@ -109,6 +109,8 @@ async def embed_hook(request: Request):
         return {"status": "success", "id_embedding": id_embedding}
 
     except Exception as e:
+        print("❌ Exception in /embed-hook:", str(e))
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/search")
@@ -146,9 +148,7 @@ async def search_similar_profiles(request: Request):
 
         return {"results": matches}
 
-
-# ...
-except Exception as e:
-    print("❌ Exception in /embed-hook:", str(e))
-    traceback.print_exc()  # Показывает стек вызовов для отладки
-    raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        print("❌ Exception in /search:", str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
