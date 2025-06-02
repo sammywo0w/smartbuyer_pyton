@@ -37,10 +37,12 @@ def is_valid_uuid(val: str) -> bool:
 
 def ensure_list(value):
     if isinstance(value, list):
-        return value
+        return [str(x).strip() for x in value if str(x).strip() != ""]
     if isinstance(value, str):
         try:
-            return ast.literal_eval(value)
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip() != ""]
         except:
             return []
     return []
@@ -114,7 +116,6 @@ async def embed_hook(request: Request):
             hourlie_id = None
 
         embedding_record = {
-            "_id": _id,
             "embedding": embedding,
             "category": ensure_list(record.get("categories_list_custom_categories")),
             "skills": ensure_list(record.get("suppliers_choise")),
@@ -122,7 +123,15 @@ async def embed_hook(request: Request):
             "hourlie_id": hourlie_id
         }
 
-        supabase.table("expert_embedding").upsert(embedding_record).execute()
+        # Проверяем, существует ли уже запись
+        existing = supabase.table("expert_embedding").select("embedding").eq("_id", _id).execute()
+
+        if existing.data:
+            supabase.table("expert_embedding").update(embedding_record).eq("_id", _id).execute()
+        else:
+            embedding_record["_id"] = _id
+            supabase.table("expert_embedding").insert(embedding_record).execute()
+
         return {"status": "success", "updated": _id}
 
     except Exception as e:
