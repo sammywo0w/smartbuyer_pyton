@@ -173,6 +173,8 @@ async def search_similar_profiles(request: Request):
         }).execute()
 
         matches = result.data if result else []
+
+        # Просто отдадим все, что вернула Supabase
         return {"results": matches}
 
     except Exception as e:
