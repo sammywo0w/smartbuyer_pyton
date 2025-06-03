@@ -135,7 +135,6 @@ async def embed_hook(request: Request):
             "hourlie_id": hourlie_id
         }
 
-        # Новая логика: ищем существующую запись по _id
         existing = supabase.table("expert_embedding").select("id_embedding").eq("_id", _id).execute()
 
         if existing.data:
@@ -151,5 +150,32 @@ async def embed_hook(request: Request):
 
     except Exception as e:
         print("❌ Exception in /embed-hook:", str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/search")
+async def search_similar_profiles(request: Request):
+    try:
+        data = await request.json()
+        query_text = data.get("query", "")
+
+        if not query_text:
+            raise ValueError("Query is empty")
+
+        response = openai.Embedding.create(
+            model="text-embedding-ada-002",
+            input=query_text
+        )
+        query_embedding = response["data"][0]["embedding"]
+
+        result = supabase.rpc("search_embeddings", {
+            "query_embedding": query_embedding
+        }).execute()
+
+        matches = result.data if result else []
+        return {"results": matches}
+
+    except Exception as e:
+        print("❌ Exception in /search:", str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
