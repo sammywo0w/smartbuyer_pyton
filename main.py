@@ -48,7 +48,6 @@ def ensure_list(value):
 @app.post("/embed-hook")
 async def embed_hook(request: Request):
     try:
-        print("=== embed-hook called ===")
         input_data = await request.json()
         record = input_data.get("record") or {}
         old_record = input_data.get("old_record") or {}
@@ -57,18 +56,14 @@ async def embed_hook(request: Request):
         if not _id:
             raise ValueError("Missing '_id' in record")
 
-        print(f"Record ID: {_id}")
-
         is_hourly = bool(record.get("title")) and bool(record.get("topics_text"))
 
         if is_hourly:
-            print("Processing as hourly profile")
             fields_to_watch = [
                 "title", "topics_text", "experience_benefits_delivered",
                 "categories_list_custom_categories", "suppliers"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
-                print("No relevant fields changed (hourlies).")
                 return {"message": "No relevant fields changed (hourlies)."}
 
             combined_text = " ".join([
@@ -79,7 +74,6 @@ async def embed_hook(request: Request):
                 safe_str(record.get("suppliers")),
             ])
         else:
-            print("Processing as expert profile")
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
                 "current_role_text", "searchfield",
@@ -87,16 +81,13 @@ async def embed_hook(request: Request):
                 "categories_list_custom_categories"
             ]
             if not fields_updated(record, old_record, fields_to_watch):
-                print("No relevant fields changed (expert).")
                 return {"message": "No relevant fields changed (expert)."}
 
-            print(f"Fetching user_data_bubble for _id: {_id}")
             user_data_result = supabase.table("user_data_bubble") \
                 .select("firstname_text, lastname_text, email, user_status_option_user_status0") \
                 .eq("_id", _id).execute()
 
             user_data = user_data_result.data[0] if user_data_result.data else {}
-            print(f"user_data: {user_data}")
 
             combined_text = " ".join([
                 safe_str(user_data.get("firstname_text")),
@@ -112,15 +103,11 @@ async def embed_hook(request: Request):
                 safe_str(record.get("current_employer_name_text")),
             ])
 
-        print(f"Combined text length: {len(combined_text)}")
-        print(f"Combined text sample: {combined_text[:300]}")
-
         response = openai.Embedding.create(
             model="text-embedding-ada-002",
             input=combined_text
         )
         embedding = response["data"][0]["embedding"]
-        print("Embedding successfully generated")
 
         hourlie_id = record.get("id_hourly")
         if not is_hourly or not is_valid_uuid(str(hourlie_id)):
@@ -138,7 +125,6 @@ async def embed_hook(request: Request):
             "type": profile_type
         }
 
-        # Обновляем в зависимости от наличия hourlie_id и type
         query = supabase.table("expert_embedding") \
             .select("id_embedding") \
             .eq("_id", _id) \
@@ -151,16 +137,41 @@ async def embed_hook(request: Request):
 
         if existing.data:
             id_embedding = existing.data[0]['id_embedding']
-            print(f"Updating existing embedding for id_embedding: {id_embedding}")
             supabase.table("expert_embedding").update(embedding_record).eq("id_embedding", id_embedding).execute()
         else:
-            print("Inserting new embedding record")
             supabase.table("expert_embedding").insert(embedding_record).execute()
 
-        print("Operation completed successfully")
         return {"status": "success", "updated": _id}
 
     except Exception as e:
-        print("❌ Exception in /embed-hook:", str(e))
-        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/search")
+async def search_similar_profiles(request: Request):
+    try:
+        data = await request.json()
+        query_text = data.get("query", "")
+
+        if not query_text:
+            raise ValueError("Query is empty")
+
+        response = openai.Embedding.create(
+            model="text-embedding-ada-002",
+            input=query_text
+        )
+        query_embedding = response["data"][0]["embedding"]
+
+        result = supabase.rpc("search_embeddings", {
+            "query_embedding": query_embedding
+        }).execute()
+
+        matches = result.data if result else []
+
+        # Фильтруем approved = true (лучше вообще в SQL функцию добавить это)
+        filtered_matches = [record for record in matches if record.get("approved") == True]
+
+        return {"results": filtered_matches}
+
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
