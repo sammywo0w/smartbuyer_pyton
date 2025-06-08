@@ -168,7 +168,7 @@ async def search_similar_profiles(request: Request):
 
         matches = result.data if result else []
 
-        return {"results": filtered_matches}
+        return {"results": matches}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
