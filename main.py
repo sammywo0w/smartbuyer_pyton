@@ -168,9 +168,6 @@ async def search_similar_profiles(request: Request):
 
         matches = result.data if result else []
 
-        # Фильтруем approved = true (лучше вообще в SQL функцию добавить это)
-        filtered_matches = [record for record in matches if record.get("approved") == True]
-
         return {"results": filtered_matches}
 
     except Exception as e:
