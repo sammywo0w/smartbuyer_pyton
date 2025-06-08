@@ -126,16 +126,28 @@ async def embed_hook(request: Request):
         if not is_hourly or not is_valid_uuid(str(hourlie_id)):
             hourlie_id = None
 
+        profile_type = "hourlie" if is_hourly else "expert"
+
         embedding_record = {
             "_id": _id,
             "embedding": embedding,
             "category": ensure_list(record.get("categories_list_custom_categories")),
             "skills": ensure_list(record.get("suppliers_choise")),
             "badges": ensure_list(record.get("spec_areas_choise")),
-            "hourlie_id": hourlie_id
+            "hourlie_id": hourlie_id,
+            "type": profile_type
         }
 
-        existing = supabase.table("expert_embedding").select("id_embedding").eq("_id", _id).execute()
+        # Обновляем в зависимости от наличия hourlie_id и type
+        query = supabase.table("expert_embedding") \
+            .select("id_embedding") \
+            .eq("_id", _id) \
+            .eq("type", profile_type)
+
+        if profile_type == "hourlie" and hourlie_id:
+            query = query.eq("hourlie_id", hourlie_id)
+
+        existing = query.execute()
 
         if existing.data:
             id_embedding = existing.data[0]['id_embedding']
@@ -150,34 +162,5 @@ async def embed_hook(request: Request):
 
     except Exception as e:
         print("❌ Exception in /embed-hook:", str(e))
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/search")
-async def search_similar_profiles(request: Request):
-    try:
-        data = await request.json()
-        query_text = data.get("query", "")
-
-        if not query_text:
-            raise ValueError("Query is empty")
-
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
-            input=query_text
-        )
-        query_embedding = response["data"][0]["embedding"]
-
-        result = supabase.rpc("search_embeddings", {
-            "query_embedding": query_embedding
-        }).execute()
-
-        matches = result.data if result else []
-
-        # Просто отдадим все, что вернула Supabase
-        return {"results": matches}
-
-    except Exception as e:
-        print("❌ Exception in /search:", str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
