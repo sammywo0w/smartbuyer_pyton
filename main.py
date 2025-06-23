@@ -66,13 +66,13 @@ async def embed_hook(request: Request):
             if not fields_updated(record, old_record, fields_to_watch):
                 return {"message": "No relevant fields changed (hourlies)."}
 
-            combined_text = " ".join([
-                safe_str(record.get("title")),
-                safe_str(record.get("topics_text")),
-                safe_str(record.get("experience_benefits_delivered")),
-                safe_str(record.get("categories_list_custom_categories")),
-                safe_str(record.get("suppliers")),
-            ])
+            combined_text = f"""
+Title: {safe_str(record.get("title"))}
+Topics: {safe_str(record.get("topics_text"))}
+Experience Delivered: {safe_str(record.get("experience_benefits_delivered"))}
+Categories: {safe_str(record.get("categories_list_custom_categories"))}
+Suppliers: {safe_str(record.get("suppliers"))}
+"""
         else:
             fields_to_watch = [
                 "about_me_text", "keyachievementssuccesses_text",
@@ -89,22 +89,23 @@ async def embed_hook(request: Request):
 
             user_data = user_data_result.data[0] if user_data_result.data else {}
 
-            combined_text = " ".join([
-                safe_str(user_data.get("firstname_text")),
-                safe_str(user_data.get("lastname_text")),
-                safe_str(user_data.get("email")),
-                safe_str(user_data.get("user_status_option_user_status0")),
-                safe_str(record.get("about_me_text")),
-                safe_str(record.get("keyachievementssuccesses_text")),
-                safe_str(record.get("current_role_text")),
-                safe_str(record.get("searchfield")),
-                safe_str(record.get("suppliers_choise")),
-                safe_str(record.get("spec_areas_choise")),
-                safe_str(record.get("current_employer_name_text")),
-            ])
+            combined_text = f"""
+Name: {safe_str(user_data.get("firstname_text"))} {safe_str(user_data.get("lastname_text"))}
+Email: {safe_str(user_data.get("email"))}
+User Status: {safe_str(user_data.get("user_status_option_user_status0"))}
+About Me: {safe_str(record.get("about_me_text"))}
+Key Achievements: {safe_str(record.get("keyachievementssuccesses_text"))}
+Current Role: {safe_str(record.get("current_role_text"))}
+Employer: {safe_str(record.get("current_employer_name_text"))}
+Search Keywords: {safe_str(record.get("searchfield"))}
+Suppliers: {safe_str(record.get("suppliers_choise"))}
+Specialist Areas: {safe_str(record.get("spec_areas_choise"))}
+Categories: {safe_str(record.get("categories_list_custom_categories"))}
+"""
 
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
+        # Генерация embedding с новой моделью
+        response = openai.embeddings.create(
+            model="text-embedding-3-small",
             input=combined_text
         )
         embedding = response["data"][0]["embedding"]
@@ -145,6 +146,7 @@ async def embed_hook(request: Request):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/search")
