@@ -108,7 +108,7 @@ Categories: {safe_str(record.get("categories_list_custom_categories"))}
             model="text-embedding-3-small",
             input=combined_text
         )
-        embedding = response["data"][0]["embedding"]
+        embedding = response.data[0].embedding
 
         hourlie_id = record.get("id_hourly")
         if not is_hourly or not is_valid_uuid(str(hourlie_id)):
