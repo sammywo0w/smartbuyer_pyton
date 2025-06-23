@@ -144,10 +144,9 @@ Categories: {safe_str(record.get("categories_list_custom_categories"))}
 
         return {"status": "success", "updated": _id}
 
-    except Exception as e:
+        except Exception as e:
+        traceback.print_exc()  # <=== добавь это!
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 @app.post("/search")
 async def search_similar_profiles(request: Request):
