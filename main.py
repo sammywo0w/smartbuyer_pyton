@@ -158,11 +158,12 @@ async def search_similar_profiles(request: Request):
         if not query_text:
             raise ValueError("Query is empty")
 
-        response = openai.Embedding.create(
-            model="text-embedding-ada-002",
+        # Новый синтаксис OpenAI SDK v1.x
+        response = openai.embeddings.create(
+            model="text-embedding-3-small",
             input=query_text
         )
-        query_embedding = response["data"][0]["embedding"]
+        query_embedding = response.data[0].embedding
 
         result = supabase.rpc("search_embeddings", {
             "query_embedding": query_embedding
@@ -173,4 +174,6 @@ async def search_similar_profiles(request: Request):
         return {"results": matches}
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
