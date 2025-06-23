@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-openai[datalib]==0.28
+openai[datalib]>=1.13.3
 python-dotenv
 supabase
 numpy
